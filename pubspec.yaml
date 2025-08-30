@@ -1,0 +1,24 @@
+name: simply_piano_clone
+description: A Simply Piano–like Flutter Web app
+publish_to: 'none'
+
+environment:
+  sdk: "3.35.2"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_web_plugins:
+    sdk: flutter
+  # Piano UI
+  piano: 1.0.4
+  # Pitch detection
+  fft: 1.5.0+1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: 6.0.0
+
+flutter:
+  uses-material-design: true
