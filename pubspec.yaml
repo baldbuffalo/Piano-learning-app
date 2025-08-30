@@ -3,7 +3,7 @@ description: A Simply Piano–like Flutter Web app
 publish_to: 'none'
 
 environment:
-  sdk: "3.35.2"
+  sdk: "3.9.2"
 
 dependencies:
   flutter:
