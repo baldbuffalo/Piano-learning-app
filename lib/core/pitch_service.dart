@@ -13,20 +13,25 @@ class PitchService {
     if (_listening) return;
     _listening = true;
 
+    // Request mic access
     final stream = await html.window.navigator.mediaDevices!.getUserMedia({'audio': true});
     _audioCtx = html.AudioContext();
     _source = _audioCtx!.createMediaStreamSource(stream);
     _analyser = _audioCtx!.createAnalyser();
-    _source!.connectNode(_analyser!);
+    _analyser!.fftSize = 2048; // Set FFT size
+    _source!.connect(_analyser!); // connectNode deprecated → use connect
 
     final buffer = Float32List(_analyser!.fftSize);
 
-    void analyze() {
+    void analyze(num _) {
       _analyser!.getFloatTimeDomainData(buffer);
-      final spectrum = FFT().Transform(buffer);
+
+      // Convert Float32List to List<double> for FFT
+      final spectrum = FFT().Transform(buffer.toList());
+
+      // Find peak
       int peakIndex = 0;
       double maxVal = 0;
-
       for (int i = 0; i < spectrum.length; i++) {
         if (spectrum[i].abs() > maxVal) {
           maxVal = spectrum[i].abs();
@@ -34,14 +39,16 @@ class PitchService {
         }
       }
 
+      // Calculate frequency
       final freq = peakIndex * _audioCtx!.sampleRate / buffer.length;
       final note = NoteUtils.getClosestNote(freq);
       onNoteDetected(note);
 
-      html.window.requestAnimationFrame((_) => analyze());
+      // Continue analyzing
+      html.window.requestAnimationFrame(analyze);
     }
 
-    analyze();
+    html.window.requestAnimationFrame(analyze);
   }
 
   void stopListening() {
