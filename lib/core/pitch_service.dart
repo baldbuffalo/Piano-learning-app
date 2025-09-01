@@ -1,11 +1,10 @@
 import 'dart:typed_data';
 import 'dart:js_interop';
-import 'dart:js_util'; // <-- For promiseToFuture
 import 'package:fftea/fftea.dart';
 import 'note_utils.dart';
 
 @JS()
-external JSAny get window;
+external Navigator get navigator;
 
 @JS()
 @staticInterop
@@ -45,6 +44,17 @@ class AnalyserNode {
 @staticInterop
 class MediaStream {}
 
+extension NavigatorAsyncExt on Navigator {
+  Future<MediaStream> getUserMediaAsync(JSAny constraints) {
+    final promise = mediaDevices.getUserMedia(constraints);
+    final completer = Completer<MediaStream>();
+    promise.then((value) {
+      completer.complete(value as MediaStream);
+    });
+    return completer.future;
+  }
+}
+
 class PitchService {
   AudioContext? _audioCtx;
   MediaStreamAudioSourceNode? _source;
@@ -55,16 +65,10 @@ class PitchService {
     if (_listening) return;
     _listening = true;
 
-    // Get navigator.mediaDevices
-    final nav = JS<Navigator>(window);
-    final mediaDevices = nav.mediaDevices;
+    // Request microphone access using JS interop
+    final stream = await navigator.getUserMediaAsync(jsify({'audio': true}));
 
-    // Request microphone access using promiseToFuture
-    final stream = await promiseToFuture<JSAny>(
-      mediaDevices.getUserMedia(JSAny.jsify({'audio': true})),
-    ) as MediaStream;
-
-    // Set up AudioContext
+    // Setup audio context and analyser
     _audioCtx = AudioContext();
     _source = _audioCtx!.createMediaStreamSource(stream);
     _analyser = _audioCtx!.createAnalyser();
@@ -76,8 +80,9 @@ class PitchService {
     void analyze(num _) {
       _analyser!.getFloatTimeDomainData(buffer);
 
-      // Convert Float32List to List<double> for FFT
-      final spectrum = FFT().Transform(buffer.toList());
+      // FFT using fftea
+      final fft = FFT(buffer.length);
+      final spectrum = fft.process(buffer.toList());
 
       // Find peak
       int peakIndex = 0;
@@ -89,16 +94,14 @@ class PitchService {
         }
       }
 
-      // Calculate frequency
       final freq = peakIndex * _audioCtx!.sampleRate / buffer.length;
       final note = NoteUtils.getClosestNote(freq);
       onNoteDetected(note);
 
-      // Continue analyzing
-      JS<void>(window)['requestAnimationFrame']!(allowInterop(analyze));
+      window.requestAnimationFrame(analyze);
     }
 
-    JS<void>(window)['requestAnimationFrame']!(allowInterop(analyze));
+    window.requestAnimationFrame(analyze);
   }
 
   void stopListening() {
