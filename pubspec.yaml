@@ -1,5 +1,5 @@
 name: simply_piano_clone
-description: A Simply Piano–like Flutter Web app
+description: A Simply Piano_like Flutter Web app
 publish_to: 'none'
 
 environment:
@@ -13,7 +13,7 @@ dependencies:
   # Piano UI
   piano: 1.0.4
   # Pitch detection compatible with Flutter Web
-  fftea: 1.5.0+1 
+  fftea: 1.5.0+1
 
 dev_dependencies:
   flutter_test:

@@ -1,35 +1,75 @@
-import 'dart:html' as html;
 import 'dart:typed_data';
-import 'package:fft/fft.dart';
+import 'package:fftea/fftea.dart';
+import 'dart:js_interop';
 import 'note_utils.dart';
 
+@JS()
+external JSAny get window;
+
+@JS()
+@staticInterop
+class Navigator {
+  external MediaDevices get mediaDevices;
+}
+
+@JS()
+@staticInterop
+class MediaDevices {
+  external JSPromise getUserMedia(JSAny constraints);
+}
+
+@JS()
+@staticInterop
+class AudioContext {
+  external MediaStreamAudioSourceNode createMediaStreamSource(MediaStream stream);
+  external AnalyserNode createAnalyser();
+  external int get sampleRate;
+  external JSPromise close();
+}
+
+@JS()
+@staticInterop
+class MediaStreamAudioSourceNode {
+  external void connect(AnalyserNode analyser);
+}
+
+@JS()
+@staticInterop
+class AnalyserNode {
+  external int fftSize;
+  external void getFloatTimeDomainData(Float32List buffer);
+}
+
+@JS()
+@staticInterop
+class MediaStream {}
+
 class PitchService {
-  html.AudioContext? _audioCtx;
-  html.MediaStreamAudioSourceNode? _source;
-  html.AnalyserNode? _analyser;
+  AudioContext? _audioCtx;
+  MediaStreamAudioSourceNode? _source;
+  AnalyserNode? _analyser;
   bool _listening = false;
 
   void startListening(Function(String) onNoteDetected) async {
     if (_listening) return;
     _listening = true;
 
-    // Request mic access
-    final stream = await html.window.navigator.mediaDevices!.getUserMedia({'audio': true});
-    _audioCtx = html.AudioContext();
-    _source = _audioCtx!.createMediaStreamSource(stream);
+    final nav = Navigator.fromJS(window);
+    final stream = await nav.mediaDevices.getUserMedia(jsify({'audio': true}));
+
+    _audioCtx = AudioContext();
+    _source = _audioCtx!.createMediaStreamSource(stream as MediaStream);
     _analyser = _audioCtx!.createAnalyser();
-    _analyser!.fftSize = 2048; // Set FFT size
-    _source!.connect(_analyser!); // connectNode deprecated → use connect
+    _analyser!.fftSize = 2048;
+    _source!.connect(_analyser!);
 
     final buffer = Float32List(_analyser!.fftSize);
 
     void analyze(num _) {
       _analyser!.getFloatTimeDomainData(buffer);
 
-      // Convert Float32List to List<double> for FFT
       final spectrum = FFT().Transform(buffer.toList());
 
-      // Find peak
       int peakIndex = 0;
       double maxVal = 0;
       for (int i = 0; i < spectrum.length; i++) {
@@ -39,16 +79,14 @@ class PitchService {
         }
       }
 
-      // Calculate frequency
       final freq = peakIndex * _audioCtx!.sampleRate / buffer.length;
       final note = NoteUtils.getClosestNote(freq);
       onNoteDetected(note);
 
-      // Continue analyzing
-      html.window.requestAnimationFrame(analyze);
+      window.requestAnimationFrame(analyze);
     }
 
-    html.window.requestAnimationFrame(analyze);
+    window.requestAnimationFrame(analyze);
   }
 
   void stopListening() {
