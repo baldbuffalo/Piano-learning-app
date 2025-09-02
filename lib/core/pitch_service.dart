@@ -1,90 +1,39 @@
 import 'dart:typed_data';
-import 'dart:js_interop';
+import 'dart:html' as html;
 import 'package:fftea/fftea.dart';
 import 'note_utils.dart';
 
-@JS()
-external Navigator get navigator;
-
-@JS()
-@staticInterop
-class Navigator {
-  external MediaDevices get mediaDevices;
-}
-
-@JS()
-@staticInterop
-class MediaDevices {
-  external JSPromise getUserMedia(JSAny constraints);
-}
-
-@JS()
-@staticInterop
-class AudioContext {
-  external MediaStreamAudioSourceNode createMediaStreamSource(MediaStream stream);
-  external AnalyserNode createAnalyser();
-  external int get sampleRate;
-  external JSPromise close();
-}
-
-@JS()
-@staticInterop
-class MediaStreamAudioSourceNode {
-  external void connect(AnalyserNode analyser);
-}
-
-@JS()
-@staticInterop
-class AnalyserNode {
-  external int fftSize;
-  external void getFloatTimeDomainData(Float32List buffer);
-}
-
-@JS()
-@staticInterop
-class MediaStream {}
-
-extension NavigatorAsyncExt on Navigator {
-  Future<MediaStream> getUserMediaAsync(JSAny constraints) {
-    final promise = mediaDevices.getUserMedia(constraints);
-    final completer = Completer<MediaStream>();
-    promise.then((value) {
-      completer.complete(value as MediaStream);
-    });
-    return completer.future;
-  }
-}
-
 class PitchService {
-  AudioContext? _audioCtx;
-  MediaStreamAudioSourceNode? _source;
-  AnalyserNode? _analyser;
   bool _listening = false;
+  final int fftSize = 2048;
 
   void startListening(Function(String) onNoteDetected) async {
     if (_listening) return;
     _listening = true;
 
-    // Request microphone access using JS interop
-    final stream = await navigator.getUserMediaAsync(jsify({'audio': true}));
+    // Request microphone access
+    final stream = await html.window.navigator.mediaDevices!
+        .getUserMedia({'audio': true});
 
-    // Setup audio context and analyser
-    _audioCtx = AudioContext();
-    _source = _audioCtx!.createMediaStreamSource(stream);
-    _analyser = _audioCtx!.createAnalyser();
-    _analyser!.fftSize = 2048;
-    _source!.connect(_analyser!);
+    final audioCtx = html.AudioContext();
+    final source = audioCtx.createMediaStreamSource(stream);
+    final analyser = audioCtx.createAnalyser();
+    analyser.fftSize = fftSize;
+    source.connect(analyser);
 
-    final buffer = Float32List(_analyser!.fftSize);
+    final buffer = Float32List(fftSize);
+    final fft = FFT(fftSize); // FFT object
 
     void analyze(num _) {
-      _analyser!.getFloatTimeDomainData(buffer);
+      analyser.getFloatTimeDomainData(buffer);
 
-      // FFT using fftea
-      final fft = FFT(buffer.length);
-      final spectrum = fft.process(buffer.toList());
+      // Convert Float32List -> Float64List for fftea
+      final input = Float64List.fromList(buffer.map((e) => e.toDouble()).toList());
 
-      // Find peak
+      // Perform FFT
+      final spectrum = fft.realFft(input); // <-- correct method
+
+      // Find peak frequency
       int peakIndex = 0;
       double maxVal = 0;
       for (int i = 0; i < spectrum.length; i++) {
@@ -94,18 +43,17 @@ class PitchService {
         }
       }
 
-      final freq = peakIndex * _audioCtx!.sampleRate / buffer.length;
+      final freq = peakIndex * audioCtx.sampleRate! / fftSize;
       final note = NoteUtils.getClosestNote(freq);
       onNoteDetected(note);
 
-      window.requestAnimationFrame(analyze);
+      if (_listening) html.window.requestAnimationFrame(analyze);
     }
 
-    window.requestAnimationFrame(analyze);
+    html.window.requestAnimationFrame(analyze);
   }
 
   void stopListening() {
-    _audioCtx?.close();
     _listening = false;
   }
 }
