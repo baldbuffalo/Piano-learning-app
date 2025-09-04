@@ -3,17 +3,13 @@ description: A Simply Piano_like Flutter Web app
 publish_to: 'none'
 
 environment:
-  sdk: "3.10.0-158.0.dev"
+  sdk: "3.10.0-158.0.dev" # your requested exact Dart SDK
 
 dependencies:
   flutter:
     sdk: flutter
-  flutter_web_plugins:
-    sdk: flutter
-  # Piano UI
+  # Web piano UI
   piano: 1.0.4
-  # Pitch detection compatible with Flutter Web
-  fftea: 1.5.0+1
 
 dev_dependencies:
   flutter_test:

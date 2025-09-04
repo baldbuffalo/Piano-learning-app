@@ -44,12 +44,6 @@
       "languageVersion": "3.3"
     },
     {
-      "name": "fftea",
-      "rootUri": "file:///Users/rishijivani/.pub-cache/hosted/pub.dev/fftea-1.5.0+1",
-      "packageUri": "lib/",
-      "languageVersion": "2.14"
-    },
-    {
       "name": "flutter",
       "rootUri": "file:///opt/homebrew/share/flutter/packages/flutter",
       "packageUri": "lib/",
@@ -64,12 +58,6 @@
     {
       "name": "flutter_test",
       "rootUri": "file:///opt/homebrew/share/flutter/packages/flutter_test",
-      "packageUri": "lib/",
-      "languageVersion": "3.8"
-    },
-    {
-      "name": "flutter_web_plugins",
-      "rootUri": "file:///opt/homebrew/share/flutter/packages/flutter_web_plugins",
       "packageUri": "lib/",
       "languageVersion": "3.8"
     },

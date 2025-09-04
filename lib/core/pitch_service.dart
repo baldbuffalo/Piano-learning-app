@@ -1,59 +1,103 @@
-import 'dart:typed_data';
+// NOTE: dart:html is deprecated in favor of package:web + js_interop,
+// but it still works on Flutter Web. We silence the lint for web only.
+// ignore: deprecated_member_use
 import 'dart:html' as html;
-import 'package:fftea/fftea.dart';
+import 'dart:typed_data';
+
 import 'note_utils.dart';
 
 class PitchService {
-  bool _listening = false;
-  final int fftSize = 2048;
+  html.AudioContext? _ctx;
+  html.AnalyserNode? _analyser;
+  bool _running = false;
 
-  void startListening(Function(String) onNoteDetected) async {
-    if (_listening) return;
-    _listening = true;
+  /// Start mic + pitch loop. Calls [onNote] with note names like "C4".
+  Future<void> startListening(void Function(String note) onNote) async {
+    if (_running) return;
+    _running = true;
 
-    // Request microphone access
+    // Request mic
     final stream = await html.window.navigator.mediaDevices!
         .getUserMedia({'audio': true});
 
-    final audioCtx = html.AudioContext();
-    final source = audioCtx.createMediaStreamSource(stream);
-    final analyser = audioCtx.createAnalyser();
-    analyser.fftSize = fftSize;
-    source.connect(analyser);
+    // Audio context + nodes
+    _ctx = html.AudioContext();
+    final source = _ctx!.createMediaStreamSource(stream);
+    _analyser = _ctx!.createAnalyser();
 
-    final buffer = Float32List(fftSize);
-    final fft = FFT(fftSize); // FFT object
+    // Configure analyser
+    _analyser!
+      ..fftSize = 2048
+      ..minDecibels = -90
+      ..maxDecibels = -10
+      ..smoothingTimeConstant = 0.85;
 
-    void analyze(num _) {
-      analyser.getFloatTimeDomainData(buffer);
+    source.connectNode(_analyser!);
 
-      // Convert Float32List -> Float64List for fftea
-      final input = Float64List.fromList(buffer.map((e) => e.toDouble()).toList());
+    final buffer = Float32List(_analyser!.fftSize);
 
-      // Perform FFT
-      final spectrum = fft.realFft(input); // <-- correct method
+    void tick(num _) {
+      if (!_running || _ctx == null || _analyser == null) return;
 
-      // Find peak frequency
-      int peakIndex = 0;
-      double maxVal = 0;
-      for (int i = 0; i < spectrum.length; i++) {
-        if (spectrum[i].abs() > maxVal) {
-          maxVal = spectrum[i].abs();
-          peakIndex = i;
-        }
-      }
+      // Pull time-domain signal
+      _analyser!.getFloatTimeDomainData(buffer);
 
-      final freq = peakIndex * audioCtx.sampleRate! / fftSize;
+      // Estimate pitch via autocorrelation
+      final freq = _estimatePitchHz(buffer, _ctx!.sampleRate.toDouble());
+
       final note = NoteUtils.getClosestNote(freq);
-      onNoteDetected(note);
+      onNote(note);
 
-      if (_listening) html.window.requestAnimationFrame(analyze);
+      html.window.requestAnimationFrame(tick);
     }
 
-    html.window.requestAnimationFrame(analyze);
+    html.window.requestAnimationFrame(tick);
   }
 
   void stopListening() {
-    _listening = false;
+    _running = false;
+    _ctx?.close();
+    _ctx = null;
+    _analyser = null;
+  }
+
+  /// Very small/fast autocorrelation for monophonic pitch.
+  /// Returns 0 if no stable pitch is found.
+  double _estimatePitchHz(Float32List signal, double sampleRate) {
+    final int size = signal.length;
+    // Remove DC offset
+    final mean = signal.reduce((a, b) => a + b) / size;
+    for (var i = 0; i < size; i++) {
+      signal[i] = signal[i] - mean;
+    }
+
+    // Energy gate to ignore silence
+    double rms = 0;
+    for (var i = 0; i < size; i++) rms += signal[i] * signal[i];
+    rms = math.sqrt(rms / size);
+    if (rms < 0.01) return 0; // too quiet
+
+    final int minLag = (sampleRate / 1000).floor(); // ~1000 Hz max
+    final int maxLag = (sampleRate / 50).floor();   // ~50 Hz min
+
+    int bestLag = -1;
+    double bestCorr = 0;
+
+    for (int lag = minLag; lag <= maxLag && lag < size; lag++) {
+      double corr = 0;
+      for (int i = 0; i < size - lag; i++) {
+        corr += signal[i] * signal[i + lag];
+      }
+      if (corr > bestCorr) {
+        bestCorr = corr;
+        bestLag = lag;
+      }
+    }
+
+    if (bestLag <= 0) return 0;
+    final freq = sampleRate / bestLag;
+    return freq.isFinite ? freq : 0;
   }
 }
+
+import 'dart:math' as math;

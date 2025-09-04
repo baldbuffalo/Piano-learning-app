@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:simply_piano_clone/features/keyboard/piano_view.dart';
-import 'package:simply_piano_clone/core/pitch_service.dart';
+import 'core/pitch_service.dart';
+import 'features/keyboard/piano_view.dart';
 
 void main() {
   runApp(const SimplyPianoClone());
@@ -15,15 +15,14 @@ class SimplyPianoClone extends StatefulWidget {
 
 class _SimplyPianoCloneState extends State<SimplyPianoClone> {
   final PitchService _pitchService = PitchService();
-  String detectedNote = "None";
+  String _detectedNote = 'None';
 
   @override
   void initState() {
     super.initState();
     _pitchService.startListening((note) {
-      setState(() {
-        detectedNote = note;
-      });
+      if (!mounted) return;
+      setState(() => _detectedNote = note);
     });
   }
 
@@ -37,19 +36,21 @@ class _SimplyPianoCloneState extends State<SimplyPianoClone> {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: "Simply Piano Clone",
+      title: 'Simply Piano Clone',
       home: Scaffold(
-        appBar: AppBar(title: const Text("Simply Piano Clone")),
+        appBar: AppBar(title: const Text('Simply Piano Clone')),
         body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
+            const SizedBox(height: 12),
+            Center(
               child: Text(
-                "Detected Note: $detectedNote",
-                style: const TextStyle(fontSize: 24),
+                'Detected Note: $_detectedNote',
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
               ),
             ),
-            Expanded(child: PianoView(highlightNote: detectedNote)),
+            const SizedBox(height: 12),
+            Expanded(child: PianoView(highlightNote: _detectedNote)),
           ],
         ),
       ),
